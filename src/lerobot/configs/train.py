@@ -107,6 +107,9 @@ class TrainPipelineConfig(HubMixin):
     # Checkpoint is saved every `save_freq` training iterations and after the last training step.
     save_freq: int = 20_000
     use_policy_training_preset: bool = True
+    # Mixed-precision mode passed to Accelerate. One of: "no", "fp16", "bf16", "fp8".
+    # bf16 is recommended on Ampere+ GPUs (A100/RTX 30xx/40xx/H100).
+    mixed_precision: str = "no"
     optimizer: OptimizerConfig | None = None
     scheduler: LRSchedulerConfig | None = None
     eval: EvalConfig = field(default_factory=EvalConfig)
