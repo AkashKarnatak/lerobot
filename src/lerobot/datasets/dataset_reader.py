@@ -51,6 +51,7 @@ class DatasetReader:
         delta_timestamps: dict[str, list[float]] | None,
         image_transforms: Callable | None,
         return_uint8: bool = False,
+        per_camera_transforms: Callable | None = None,
     ):
         """Initialize the reader with metadata, filtering, and transform config.
 
@@ -75,6 +76,7 @@ class DatasetReader:
         self._tolerance_s = tolerance_s
         self._video_backend = video_backend
         self._image_transforms = image_transforms
+        self._per_camera_transforms = per_camera_transforms
         self._return_uint8 = return_uint8
 
         self.hf_dataset: datasets.Dataset | None = None
@@ -286,10 +288,17 @@ class DatasetReader:
             video_frames = self._query_videos(query_timestamps, ep_idx)
             item = {**video_frames, **item}
 
-        if self._image_transforms is not None:
+        if self._per_camera_transforms is not None or self._image_transforms is not None:
             image_keys = self._meta.camera_keys
             for cam in image_keys:
-                item[cam] = self._image_transforms(item[cam])
+                img = item[cam]
+                # Per-camera deterministic resize runs first so subsequent augmentations
+                # operate on the smaller tensor.
+                if self._per_camera_transforms is not None:
+                    img = self._per_camera_transforms(cam, img)
+                if self._image_transforms is not None:
+                    img = self._image_transforms(img)
+                item[cam] = img
 
         # Add task as a string
         task_idx = item["task_index"].item()

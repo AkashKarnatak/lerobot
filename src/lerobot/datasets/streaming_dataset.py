@@ -252,6 +252,7 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
         rng: np.random.Generator | None = None,
         shuffle: bool = True,
         return_uint8: bool = False,
+        per_camera_transforms: Callable | None = None,
     ):
         """Initialize a StreamingLeRobotDataset.
 
@@ -280,6 +281,7 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
         self.streaming_from_local = root is not None
 
         self.image_transforms = image_transforms
+        self.per_camera_transforms = per_camera_transforms
         self.episodes = episodes
         self.tolerance_s = tolerance_s
         self.revision = revision if revision else CODEBASE_VERSION
@@ -500,10 +502,15 @@ class StreamingLeRobotDataset(torch.utils.data.IterableDataset):
             )
             video_frames = self._query_videos(query_timestamps, ep_idx)
 
-            if self.image_transforms is not None:
+            if self.per_camera_transforms is not None or self.image_transforms is not None:
                 image_keys = self.meta.camera_keys
                 for cam in image_keys:
-                    video_frames[cam] = self.image_transforms(video_frames[cam])
+                    img = video_frames[cam]
+                    if self.per_camera_transforms is not None:
+                        img = self.per_camera_transforms(cam, img)
+                    if self.image_transforms is not None:
+                        img = self.image_transforms(img)
+                    video_frames[cam] = img
 
             updates.append(video_frames)
 

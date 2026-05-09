@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass, field
 
-from lerobot.transforms import ImageTransformsConfig
+from lerobot.transforms import ImageResizeConfig, ImageTransformsConfig
 from lerobot.utils.import_utils import get_safe_default_codec
 
 
@@ -32,6 +32,7 @@ class DatasetConfig:
     root: str | None = None
     episodes: list[int] | None = None
     image_transforms: ImageTransformsConfig = field(default_factory=ImageTransformsConfig)
+    image_resize: ImageResizeConfig = field(default_factory=ImageResizeConfig)
     revision: str | None = None
     use_imagenet_stats: bool = True
     video_backend: str = field(default_factory=get_safe_default_codec)

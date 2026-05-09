@@ -21,7 +21,7 @@ import torch
 from lerobot.configs import PreTrainedConfig
 from lerobot.configs.rewards import RewardModelConfig
 from lerobot.configs.train import TrainPipelineConfig
-from lerobot.transforms import ImageTransforms
+from lerobot.transforms import ImageTransforms, PerCameraResize
 from lerobot.utils.constants import ACTION, IMAGENET_STATS, OBS_PREFIX, REWARD
 
 from .dataset_metadata import LeRobotDatasetMetadata
@@ -80,6 +80,15 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
     image_transforms = (
         ImageTransforms(cfg.dataset.image_transforms) if cfg.dataset.image_transforms.enable else None
     )
+    per_camera_transforms = (
+        PerCameraResize(
+            cfg.dataset.image_resize.sizes,
+            interpolation=cfg.dataset.image_resize.interpolation,
+            antialias=cfg.dataset.image_resize.antialias,
+        )
+        if cfg.dataset.image_resize.sizes
+        else None
+    )
 
     if isinstance(cfg.dataset.repo_id, str):
         ds_meta = LeRobotDatasetMetadata(
@@ -97,6 +106,7 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
                 video_backend=cfg.dataset.video_backend,
                 return_uint8=True,
                 tolerance_s=cfg.tolerance_s,
+                per_camera_transforms=per_camera_transforms,
             )
         else:
             dataset = StreamingLeRobotDataset(
@@ -109,6 +119,7 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
                 max_num_shards=cfg.num_workers,
                 tolerance_s=cfg.tolerance_s,
                 return_uint8=True,
+                per_camera_transforms=per_camera_transforms,
             )
     else:
         raise NotImplementedError("The MultiLeRobotDataset isn't supported for now.")
@@ -123,6 +134,24 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
             "Multiple datasets were provided. Applied the following index mapping to the provided datasets: "
             f"{pformat(dataset.repo_id_to_index, indent=2)}"
         )
+
+    # Patch dataset feature shapes to match the resized resolution so downstream
+    # consumers (e.g. make_policy via dataset_to_policy_features) build the model
+    # with input_features matching the actual tensors fed during training.
+    if per_camera_transforms is not None:
+        for cam, hw in cfg.dataset.image_resize.sizes.items():
+            if cam not in dataset.meta.features:
+                continue
+            h, w = int(hw[0]), int(hw[1])
+            ft = dataset.meta.features[cam]
+            names = ft.get("names")
+            shape = tuple(ft["shape"])
+            if names is not None and len(names) >= 3 and names[2] in ("channel", "channels"):
+                # On-disk (H, W, C)
+                ft["shape"] = (h, w, shape[2])
+            elif len(shape) == 3:
+                # (C, H, W)
+                ft["shape"] = (shape[0], h, w)
 
     if cfg.dataset.use_imagenet_stats:
         for key in dataset.meta.camera_keys:

@@ -199,9 +199,14 @@ def train(cfg: TrainPipelineConfig, accelerator: "Accelerator | None" = None):
             step_scheduler_with_optimizer=False,
             kwargs_handlers=[ddp_kwargs],
             cpu=force_cpu,
+            mixed_precision=cfg.mixed_precision,
         )
 
     init_logging(accelerator=accelerator)
+    logging.info(
+        f"Accelerator mixed_precision={accelerator.mixed_precision} "
+        f"native_amp={accelerator.native_amp}"
+    )
 
     # Determine if this is the main process (for logging and checkpointing)
     # When using accelerate, only the main process should log to avoid duplicate outputs

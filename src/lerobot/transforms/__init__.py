@@ -13,18 +13,22 @@
 # limitations under the License.
 
 from .transforms import (
+    ImageResizeConfig,
     ImageTransformConfig,
     ImageTransforms,
     ImageTransformsConfig,
+    PerCameraResize,
     RandomSubsetApply,
     SharpnessJitter,
     make_transform_from_config,
 )
 
 __all__ = [
+    "ImageResizeConfig",
     "ImageTransformConfig",
     "ImageTransforms",
     "ImageTransformsConfig",
+    "PerCameraResize",
     "RandomSubsetApply",
     "SharpnessJitter",
     "make_transform_from_config",

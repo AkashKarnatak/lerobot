@@ -62,6 +62,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         streaming_encoding: bool = False,
         encoder_queue_maxsize: int = 30,
         encoder_threads: int | None = None,
+        per_camera_transforms: Callable | None = None,
     ):
         """
         2 modes are available for instantiating this class, depending on 2 different use cases:
@@ -198,6 +199,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         self._requested_root = Path(root) if root else None
         self.reader = None
         self.set_image_transforms(image_transforms)
+        self.per_camera_transforms = per_camera_transforms
         self.delta_timestamps = delta_timestamps
         self.episodes = episodes
         self.tolerance_s = tolerance_s
@@ -228,6 +230,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
             delta_timestamps=delta_timestamps,
             image_transforms=image_transforms,
             return_uint8=self._return_uint8,
+            per_camera_transforms=per_camera_transforms,
         )
 
         # Load actual data
@@ -292,6 +295,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
                 delta_timestamps=self.delta_timestamps,
                 image_transforms=self.image_transforms,
                 return_uint8=self._return_uint8,
+                per_camera_transforms=getattr(self, "per_camera_transforms", None),
             )
         return self.reader
 
@@ -495,6 +499,14 @@ class LeRobotDataset(torch.utils.data.Dataset):
     def clear_image_transforms(self) -> None:
         """Remove the transform applied to visual observations."""
         self.set_image_transforms(None)
+
+    def set_per_camera_transforms(self, per_camera_transforms: Callable | None) -> None:
+        """Replace the per-camera (key-aware) transform applied to visual observations."""
+        if per_camera_transforms is not None and not callable(per_camera_transforms):
+            raise TypeError("per_camera_transforms must be callable or None.")
+        self.per_camera_transforms = per_camera_transforms
+        if self.reader is not None:
+            self.reader._per_camera_transforms = per_camera_transforms
 
     # ── Hub methods (stay on facade) ──────────────────────────────────
 

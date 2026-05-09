@@ -258,3 +258,48 @@ class ImageTransforms(Transform):
 
     def forward(self, *inputs: Any) -> Any:
         return self.tf(*inputs)
+
+
+@dataclass
+class ImageResizeConfig:
+    """Per-camera deterministic resize applied in the dataloader before image_transforms.
+
+    `sizes` maps a camera key (e.g. ``"observation.images.head"``) to a target ``(H, W)``.
+    Resize is active iff `sizes` is non-empty; cameras not listed are left untouched.
+    """
+
+    sizes: dict[str, tuple[int, int]] = field(default_factory=dict)
+    interpolation: str = "bilinear"
+    antialias: bool = True
+
+
+class PerCameraResize:
+    """Key-aware resize callable: resizes each camera's frame to its configured (H, W).
+
+    Unlike `ImageTransforms` (which composes random augmentations and is per-tensor),
+    this runs deterministically every call and dispatches by camera key so each camera
+    can have a different target resolution.
+    """
+
+    def __init__(
+        self,
+        sizes: dict[str, tuple[int, int] | list[int]],
+        interpolation: str = "bilinear",
+        antialias: bool = True,
+    ) -> None:
+        try:
+            interp = getattr(v2.InterpolationMode, interpolation.upper())
+        except AttributeError as e:
+            raise ValueError(
+                f"Unknown interpolation mode '{interpolation}'. Must be one of "
+                f"{[m.name.lower() for m in v2.InterpolationMode]}"
+            ) from e
+        self.sizes = {k: tuple(s) for k, s in sizes.items()}
+        self.resizes: dict[str, Callable] = {
+            k: v2.Resize(list(s), interpolation=interp, antialias=antialias)
+            for k, s in self.sizes.items()
+        }
+
+    def __call__(self, cam_key: str, img: torch.Tensor) -> torch.Tensor:
+        r = self.resizes.get(cam_key)
+        return r(img) if r is not None else img
